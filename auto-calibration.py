@@ -1,9 +1,10 @@
-from state import StateMachine
+
 import config
 import pyaudio
 import time
 import signals
 import sys
+import math
 from avg import RunningAvg
 from enum import Enum
 
@@ -24,7 +25,7 @@ FILE_NAME = 'out.csv'
 if len(sys.argv) >= 2:
   FILE_NAME = sys.argv[1]
 with open(FILE_NAME, 'w') as the_file:
-  the_file.write('FREQ,AMP_MULT,DLY\n')
+  the_file.write('FREQ,AMP_MULT,DLY,PHASE\n')
 
 COUNTER = 0
 ALTERNATE_COUNTER = 0
@@ -61,6 +62,28 @@ def get_avg(data):
   return avg.get(signals.rms(hp.process(data)))
 
 def callback(data, frame_count, time_info, status):
+  global COUNTER
+  global ALTERNATE_COUNTER
+  global MIN_SOUND
+  global CUR_SOUND
+  global STATE
+  global NEXT_STATE
+  global FREQ
+  global SILENCE
+
+  global NOISE_RMS
+  global SPK_RMS
+  global PREV_SOUND
+  global SPK_MULT
+  global SPK_DLY
+
+  global sine
+  global hp
+  global avg
+  global recording
+  global p
+  global line
+
   out = bytes([])
   de = signals.decode(data)
   head_data = de[config.CH_HEAD_MIC]
@@ -68,7 +91,7 @@ def callback(data, frame_count, time_info, status):
 
   if (STATE == state.STARTED):
     MIN_SOUND = get_avg(head_data)
-    out = singals.encode([SILENCE, SILENCE])
+    out = signals.encode([SILENCE, SILENCE])
     if (COUNTER > 20):
       STATE = state.PLAY_NOISE
       COUNTER = 0
@@ -81,7 +104,7 @@ def callback(data, frame_count, time_info, status):
     out_arr[config.CH_NOISE_SPK] = noise
     out = signals.encode(out_arr)
 
-    if (counter > 10):
+    if (COUNTER > 10):
       STATE = state.RECORD_NOISE
       COUNTER = 0
       avg = RunningAvg(25)
@@ -91,12 +114,13 @@ def callback(data, frame_count, time_info, status):
   elif (STATE == state.RECORD_NOISE):
     recording.record(noise_data)
     NOISE_RMS = get_avg(head_data)
+    noise = sine.get(config.NOISE[0])
     out_arr = [[] for i in range(0,2)]
     out_arr[config.CH_CANCEL_SPK] = SILENCE
     out_arr[config.CH_NOISE_SPK] = noise
     out = signals.encode(out_arr)
 
-    if (counter > 50):
+    if (COUNTER > 50):
       print("noise RMS: %f" % NOISE_RMS)
       STATE = state.RECORD_NOISE_DONE
       COUNTER = 0
@@ -109,7 +133,7 @@ def callback(data, frame_count, time_info, status):
     out_arr[config.CH_NOISE_SPK] = SILENCE
     out = signals.encode(out_arr)
 
-    if (counter > 10):
+    if (COUNTER > 10):
       STATE = state.MATCH_PLAYBACK
       avg = RunningAvg(5)
       hp = signals.HighPass()
@@ -144,10 +168,10 @@ def callback(data, frame_count, time_info, status):
     ALTERNATE_COUNTER = 0
     COUNTER = 0
     avg = RunningAvg(5)
-    hp = HighPass()
+    hp = signals.HighPass()
 
     line = signals.Line(
-      config.CH_NOISE_MIC
+      config.CH_NOISE_MIC,
       config.CH_CANCEL_SPK,
       SPK_MULT,
       SPK_DLY)
@@ -181,7 +205,6 @@ def callback(data, frame_count, time_info, status):
     NEXT_STATE = state.DELAY_SPEAKER
 
     dly = 1
-    print(MIN_SOUND, PREV_SOUND)
     SPK_DLY += dly
     line.delay(dly)
 
@@ -198,7 +221,6 @@ def callback(data, frame_count, time_info, status):
     NEXT_STATE = state.EXPEDITE_SPEAKER
 
     dly = 1
-    print(MIN_SOUND, PREV_SOUND)
     SPK_DLY -= dly
     line.expedite(dly)
 
@@ -239,13 +261,21 @@ def callback(data, frame_count, time_info, status):
       avg = RunningAvg(5)
 
   elif (STATE == state.DONE):
-    with open(FILE_NAME, 'w') as the_file:
-      the_file.write('%d,%f,%d\n' % (FREQ,SPK_MULT,SPK_DLY))
+    phase = -float(FREQ)*2*math.pi*SPK_DLY/config.RATE
+
+    with open(FILE_NAME, 'a') as the_file:
+      the_file.write('%d,%f,%d,%f\n' % (FREQ,SPK_MULT,SPK_DLY,phase))
+    print('%d,%f,%d,%f\n' % (FREQ,SPK_MULT,SPK_DLY,phase))
     COUNTER = 0
     ALTERNATE_COUNTER = 0
     MIN_SOUND = 0
     CUR_SOUND = 0
     FREQ += config.FREQ_STEP
+
+    sine = signals.SineWave(config.RATE/float(FREQ))
+    recording = signals.Record()
+
+    out = signals.encode([SILENCE, SILENCE])
     STATE = state.STARTED
 
 
