@@ -13,7 +13,7 @@ CH_NOISE_SPK = 1
 
 # (amp, dly)
 NOISE=(32000,0)
-SPK=(1,20)
+SPK=(0.6,20)
 
 START_FREQ = 500
 FREQ_STEP = 50

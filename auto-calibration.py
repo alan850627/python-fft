@@ -161,7 +161,7 @@ def callback(data, frame_count, time_info, status):
       # NOT SURE IF GOOD
       elif (SPK_RMS > NOISE_RMS):
         SPK_MULT = SPK_MULT - (SPK_RMS - NOISE_RMS)/100000
-      elif (spk_rms < noise_rms):
+      elif (SPK_RMS < noise_rms):
         SPK_MULT = SPK_MULT + (NOISE_RMS - SPK_RMS)/100000
 
   elif (STATE == state.MATCH_PLAYBACK_DONE):
