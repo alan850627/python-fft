@@ -6,6 +6,7 @@ import pyaudio
 import time
 import numpy as np
 import cmath
+from bisect import bisect_left
 
 if len(sys.argv) < 2:
   print("* Runs noise cancellation device. \n* Usage: %s table.csv" % sys.argv[0])
@@ -32,51 +33,44 @@ for row in reader:
 
 p = pyaudio.PyAudio()
 
-
-find_pt = 0
 def find_closest(myList, myNumber, reset=False):
-  global find_pt
-  if reset:
-    find_pt = 0
-
-  if myList[find_pt] > myNumber:
-    return find_pt
-
-  while find_pt < len(myList)-1 and myList[find_pt] < myNumber:
-    find_pt += 1
-
-  find_pt -= 1
-  return find_pt
+  pos = bisect_left(myList, myNumber)
+  if pos >= len(myList) - 2:
+    return len(myList) - 2
+  return pos
 
 
 def interpolate(leftX, rightX, leftY, rightY, X):
+  if (leftX > X):
+    return leftY
+  if (X > rightX):
+    return rightY
   return float(rightY-leftY)/(rightX-leftX)*(X-leftX)+leftY
 
 # Given the frequency, and the FFT data, calculate new data based on lookup table.
 # returns a pair (amp, phase)
-def table_lookup(freq, polar, reset=False):
+def table_lookup(freq, reset=False):
   pos = find_closest(FREQ_LIST, freq, reset)
   leftF = FREQ_LIST[pos]
   rightF = FREQ_LIST[pos+1]
-  newAmp = interpolate(leftF, rightF, AMP_LIST[pos], AMP_LIST[pos+1], freq) * polar[0]
-  newPhase = interpolate(leftF, rightF, PHASE_LIST[pos], PHASE_LIST[pos+1], freq) + polar[1]
-  return newAmp, newPhase
+  amp_mul = interpolate(leftF, rightF, AMP_LIST[pos], AMP_LIST[pos+1], freq)
+  phase_dly = interpolate(leftF, rightF, PHASE_LIST[pos], PHASE_LIST[pos+1], freq)
+  return amp_mul, phase_dly
 
 
 def callback(data, frame_count, time_info, status):
-  global find_pt
-  find_pt = 0
   decoded = signals.decode(data)
   noise = decoded[config.CH_NOISE_MIC]
   out = [[0]*config.CHUNK for i in range(0,config.CHANNELS)]
 
   # FFT HERE!
   spectre = np.fft.fft(noise)
-
-  for i in range(1,int(spectre.size/64)):
-  # for i in range(75,75+64*4,4):
+  newSpectre = spectre
+  for i in range(1,int(config.CHUNK/2)):
     polar = cmath.polar(spectre[i])
-    newAmp, newPhase = table_lookup(FREQ_BUCKETS[i], polar)
+    amp_mul, phase_dly = table_lookup(FREQ_BUCKETS[i])
+    newAmp = polar[0] * amp_mul
+    newPhase = polar[1] + phase_dly
 
     # Somehow the signal clips a lot
     if newAmp > 2**(config.WIDTH * 8 - 1):
@@ -86,12 +80,13 @@ def callback(data, frame_count, time_info, status):
     # a[1:n//2] should contain the positive-frequency terms,
     # a[n//2 + 1:] should contain the negative-frequency terms, in increasing order starting from the most negative frequency.
     # Negative frequency terms are simply conjugates of the positive ones.
-    spectre[i] = cmath.rect(newAmp, newPhase)
-    spectre[spectre.size-i] = np.conj(spectre[i])
+    comp = cmath.rect(newAmp, newPhase)
+    newSpectre[i] = comp
+    newSpectre[config.CHUNK-i] = np.conj(comp)
 
   # Get rid of very small complex components that probably result from 
   # not so precise calculations in python's part.
-  out[config.CH_CANCEL_SPK] = np.real(np.fft.ifft(spectre))
+  out[config.CH_CANCEL_SPK] = np.real(np.fft.ifft(newSpectre))
 
   return (signals.encode(out), pyaudio.paContinue)
 
