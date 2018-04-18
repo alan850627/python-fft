@@ -6,7 +6,6 @@ import pyaudio
 import time
 import numpy as np
 import cmath
-from bisect import bisect_left
 
 if len(sys.argv) < 2:
   print("* Runs noise cancellation device. \n* Usage: %s table.csv" % sys.argv[0])
@@ -34,19 +33,29 @@ for row in reader:
 p = pyaudio.PyAudio()
 
 
-def find_closest(myList, myNumber):
-  pos = bisect_left(myList, myNumber)
-  if pos >= len(myList) - 2:
-    return len(myList) - 2
-  return pos
+find_pt = 0
+def find_closest(myList, myNumber, reset=False):
+  global find_pt
+  if reset:
+    find_pt = 0
+
+  if myList[find_pt] > myNumber:
+    return find_pt
+
+  while find_pt < len(myList)-1 and myList[find_pt] < myNumber:
+    find_pt += 1
+
+  find_pt -= 1
+  return find_pt
+
 
 def interpolate(leftX, rightX, leftY, rightY, X):
   return float(rightY-leftY)/(rightX-leftX)*(X-leftX)+leftY
 
 # Given the frequency, and the FFT data, calculate new data based on lookup table.
 # returns a pair (amp, phase)
-def table_lookup(freq, polar):
-  pos = find_closest(FREQ_LIST, freq)
+def table_lookup(freq, polar, reset=False):
+  pos = find_closest(FREQ_LIST, freq, reset)
   leftF = FREQ_LIST[pos]
   rightF = FREQ_LIST[pos+1]
   newAmp = interpolate(leftF, rightF, AMP_LIST[pos], AMP_LIST[pos+1], freq) * polar[0]
@@ -55,6 +64,8 @@ def table_lookup(freq, polar):
 
 
 def callback(data, frame_count, time_info, status):
+  global find_pt
+  find_pt = 0
   decoded = signals.decode(data)
   noise = decoded[config.CH_NOISE_MIC]
   out = [[0]*config.CHUNK for i in range(0,config.CHANNELS)]
@@ -62,8 +73,8 @@ def callback(data, frame_count, time_info, status):
   # FFT HERE!
   spectre = np.fft.fft(noise)
 
-  # for i in range(1,int(spectre.size/2)):
-  for i in range(75,75+64*4,4):
+  for i in range(1,int(spectre.size/64)):
+  # for i in range(75,75+64*4,4):
     polar = cmath.polar(spectre[i])
     newAmp, newPhase = table_lookup(FREQ_BUCKETS[i], polar)
 
