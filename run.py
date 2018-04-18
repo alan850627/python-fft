@@ -4,6 +4,8 @@ import config
 import signals
 import pyaudio
 import time
+import numpy as np
+import cmath
 from bisect import bisect_left
 
 if len(sys.argv) < 2:
@@ -23,9 +25,9 @@ PHASE_LIST = []
 # Skip the header
 next(reader)
 for row in reader:
-  FREQ_LIST.append(row[0])
-  AMP_LIST.append(row[1])
-  PHASE_LIST.append(row[3])
+  FREQ_LIST.append(float(row[0]))
+  AMP_LIST.append(float(row[1]))
+  PHASE_LIST.append(float(row[3]))
 
 p = pyaudio.PyAudio()
 
@@ -36,7 +38,7 @@ def find_closest(myList, myNumber):
     return len(myList) - 2
   return pos
 
-def interpolate(leftX, leftY, rightX, rightY, X):
+def interpolate(leftX, rightX, leftY, rightY, X):
   return float(rightY-leftY)/(rightX-leftX)*(X-leftX)+leftY
 
 # Given the frequency, and the FFT data, calculate new data based on lookup table.
@@ -46,7 +48,7 @@ def table_lookup(freq, polar):
   leftF = FREQ_LIST[pos]
   rightF = FREQ_LIST[pos+1]
   newAmp = interpolate(leftF, rightF, AMP_LIST[pos], AMP_LIST[pos+1], freq) * polar[0]
-  newPhase = interpolate(leftF, rightF, PHASE_LIST[pos]. PAHSE_LIST[pos+1], freq) + polar[1]
+  newPhase = interpolate(leftF, rightF, PHASE_LIST[pos], PHASE_LIST[pos+1], freq) + polar[1]
   return newAmp, newPhase
 
 
@@ -62,6 +64,10 @@ def callback(data, frame_count, time_info, status):
   for i in range(1,int(spectre.size/2)):
     polar = cmath.polar(spectre[i])
     newAmp, newPhase = table_lookup(freq[i], polar)
+
+    # Somehow the signal clips a lot
+    if newAmp > 2**(config.WIDTH * 8 - 1):
+      newAmp = 2**(config.WIDTH * 8 - 1) * np.sign(newAmp)
 
     # a[0] should contain the zero frequency term,
     # a[1:n//2] should contain the positive-frequency terms,
