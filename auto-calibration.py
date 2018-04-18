@@ -128,6 +128,7 @@ def callback(data, frame_count, time_info, status):
 
   elif (STATE == state.RECORD_NOISE_DONE):
     recorded_noise = recording.get()
+    recorded_noise = [int(i * SPK_MULT) for i in recorded_noise]
     out_arr = [[] for i in range(0,2)]
     out_arr[config.CH_CANCEL_SPK] = recorded_noise
     out_arr[config.CH_NOISE_SPK] = SILENCE
@@ -160,9 +161,9 @@ def callback(data, frame_count, time_info, status):
 
       # NOT SURE IF GOOD
       elif (SPK_RMS > NOISE_RMS):
-        SPK_MULT = SPK_MULT - (SPK_RMS - NOISE_RMS)/100000
-      elif (SPK_RMS < noise_rms):
-        SPK_MULT = SPK_MULT + (NOISE_RMS - SPK_RMS)/100000
+        SPK_MULT = SPK_MULT - (SPK_RMS - NOISE_RMS)/10000
+      elif (SPK_RMS < NOISE_RMS):
+        SPK_MULT = SPK_MULT + (NOISE_RMS - SPK_RMS)/10000
 
   elif (STATE == state.MATCH_PLAYBACK_DONE):
     ALTERNATE_COUNTER = 0

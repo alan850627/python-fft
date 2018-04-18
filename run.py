@@ -21,6 +21,8 @@ reader = csv.reader(f)
 FREQ_LIST = []
 AMP_LIST = []
 PHASE_LIST = []
+FREQ_BUCKETS = np.fft.fftfreq(config.CHUNK, 1/float(config.RATE))
+BUCKET_STEP = FREQ_BUCKETS[1] - FREQ_BUCKETS[0]
 
 # Skip the header
 next(reader)
@@ -34,7 +36,7 @@ p = pyaudio.PyAudio()
 
 def find_closest(myList, myNumber):
   pos = bisect_left(myList, myNumber)
-  if pos == len(myList):
+  if pos >= len(myList) - 2:
     return len(myList) - 2
   return pos
 
@@ -59,11 +61,11 @@ def callback(data, frame_count, time_info, status):
 
   # FFT HERE!
   spectre = np.fft.fft(noise)
-  freq = np.fft.fftfreq(spectre.size, 1/float(config.RATE))
 
-  for i in range(1,int(spectre.size/2)):
+  # for i in range(1,int(spectre.size/2)):
+  for i in range(75,75+64*4,4):
     polar = cmath.polar(spectre[i])
-    newAmp, newPhase = table_lookup(freq[i], polar)
+    newAmp, newPhase = table_lookup(FREQ_BUCKETS[i], polar)
 
     # Somehow the signal clips a lot
     if newAmp > 2**(config.WIDTH * 8 - 1):
