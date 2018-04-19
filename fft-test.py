@@ -24,6 +24,7 @@ AMP_LIST = []
 PHASE_LIST = []
 FREQ_BUCKETS = np.fft.fftfreq(config.CHUNK, 1/float(config.RATE))
 BUCKET_STEP = FREQ_BUCKETS[1] - FREQ_BUCKETS[0]
+print("Frequency Bucket Step: %f" %BUCKET_STEP)
 
 # Skip the header
 next(reader)
@@ -72,16 +73,13 @@ while len(data) > 0:
   # FFT HERE!
   spectre = np.fft.fft(noise)
   newSpectre = spectre
+
   for i in range(1,int(config.CHUNK/2)):
     polar = cmath.polar(spectre[i])
     amp_mul, phase_dly = table_lookup(FREQ_BUCKETS[i])
 
     newAmp = polar[0] * amp_mul
-    newPhase = polar[1] + 3.14159
-
-    # Somehow the signal clips a lot
-    if newAmp > 2**(config.WIDTH * 8 - 1):
-      newAmp = 2**(config.WIDTH * 8 - 1) * np.sign(newAmp)
+    newPhase = polar[1] + phase_dly
 
     # a[0] should contain the zero frequency term,
     # a[1:n//2] should contain the positive-frequency terms,
@@ -94,6 +92,7 @@ while len(data) > 0:
   # Get rid of very small complex components that probably result from 
   # not so precise calculations in python's part.
   out[config.CH_CANCEL_SPK] = np.real(np.fft.ifft(newSpectre))
+
   encoded = signals.encode(out)
   frames.append(encoded)
   data = wf.readframes(config.CHUNK)

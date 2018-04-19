@@ -5,6 +5,7 @@ import time
 import signals
 import sys
 import math
+import numpy as np
 from avg import RunningAvg
 from enum import Enum
 
@@ -33,7 +34,11 @@ MIN_SOUND = 0
 CUR_SOUND = 0
 STATE = state.STARTED
 NEXT_STATE = state.DELAY_SPEAKER
-FREQ = config.START_FREQ
+
+FREQ_BUCKETS = np.fft.fftfreq(config.CHUNK, 1/float(config.RATE))
+BUCKET_STEP = FREQ_BUCKETS[1] - FREQ_BUCKETS[0]
+print("Frequency Bucket Step: %f" %BUCKET_STEP)
+FREQ = FREQ_BUCKETS[config.START_BUCKET]
 SILENCE = [0 for i in range(0, config.CHUNK)]
 
 NOISE_RMS = 0
@@ -265,13 +270,13 @@ def callback(data, frame_count, time_info, status):
     phase = -float(FREQ)*2*math.pi*SPK_DLY/config.RATE
 
     with open(FILE_NAME, 'a') as the_file:
-      the_file.write('%d,%f,%d,%f\n' % (FREQ,SPK_MULT,SPK_DLY,phase))
-    print('%d,%f,%d,%f\n' % (FREQ,SPK_MULT,SPK_DLY,phase))
+      the_file.write('%f,%f,%d,%f\n' % (FREQ,SPK_MULT,SPK_DLY,phase))
+    print('%f,%f,%d,%f\n' % (FREQ,SPK_MULT,SPK_DLY,phase))
     COUNTER = 0
     ALTERNATE_COUNTER = 0
     MIN_SOUND = 0
     CUR_SOUND = 0
-    FREQ += config.FREQ_STEP
+    FREQ += BUCKET_STEP
 
     sine = signals.SineWave(config.RATE/float(FREQ))
     recording = signals.Record()

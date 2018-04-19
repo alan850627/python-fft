@@ -66,15 +66,13 @@ def callback(data, frame_count, time_info, status):
   # FFT HERE!
   spectre = np.fft.fft(noise)
   newSpectre = spectre
+
   for i in range(1,int(config.CHUNK/2)):
     polar = cmath.polar(spectre[i])
     amp_mul, phase_dly = table_lookup(FREQ_BUCKETS[i])
+
     newAmp = polar[0] * amp_mul
     newPhase = polar[1] + phase_dly
-
-    # Somehow the signal clips a lot
-    if newAmp > 2**(config.WIDTH * 8 - 1):
-      newAmp = 2**(config.WIDTH * 8 - 1) * np.sign(newAmp)
 
     # a[0] should contain the zero frequency term,
     # a[1:n//2] should contain the positive-frequency terms,
@@ -88,7 +86,9 @@ def callback(data, frame_count, time_info, status):
   # not so precise calculations in python's part.
   out[config.CH_CANCEL_SPK] = np.real(np.fft.ifft(newSpectre))
 
-  return (signals.encode(out), pyaudio.paContinue)
+  encoded = signals.encode(out)
+
+  return (encoded, pyaudio.paContinue)
 
 stream = p.open(format=p.get_format_from_width(config.WIDTH),
                 channels=config.CHANNELS,

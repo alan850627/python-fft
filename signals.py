@@ -116,7 +116,10 @@ def decode(data):
   return decoded
 
 def int_to_bytes(x, WIDTH):
-    return int(x).to_bytes(WIDTH, 'little', signed=True)
+  # Protect from clipping
+  if x > 2**(config.WIDTH * 8 - 1):
+    x = 2**(config.WIDTH * 8 - 1) * np.sign(x)
+  return int(x).to_bytes(WIDTH, 'little', signed=True)
 
 def rms(y):
   y = np.array(y)
