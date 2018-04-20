@@ -38,7 +38,8 @@ NEXT_STATE = state.DELAY_SPEAKER
 FREQ_BUCKETS = np.fft.fftfreq(config.CHUNK, 1/float(config.RATE))
 BUCKET_STEP = FREQ_BUCKETS[1] - FREQ_BUCKETS[0]
 print("Frequency Bucket Step: %f" %BUCKET_STEP)
-FREQ = FREQ_BUCKETS[config.START_BUCKET]
+FREQ_BUCKET_PT = config.START_BUCKET
+FREQ = FREQ_BUCKETS[FREQ_BUCKET_PT]
 SILENCE = [0 for i in range(0, config.CHUNK)]
 
 NOISE_RMS = 0
@@ -74,6 +75,7 @@ def callback(data, frame_count, time_info, status):
   global STATE
   global NEXT_STATE
   global FREQ
+  global FREQ_BUCKET_PT
   global SILENCE
 
   global NOISE_RMS
@@ -276,7 +278,8 @@ def callback(data, frame_count, time_info, status):
     ALTERNATE_COUNTER = 0
     MIN_SOUND = 0
     CUR_SOUND = 0
-    FREQ += BUCKET_STEP
+    FREQ_BUCKET_PT += 1
+    FREQ = FREQ_BUCKETS[FREQ_BUCKET_PT]
 
     sine = signals.SineWave(config.RATE/float(FREQ))
     recording = signals.Record()
