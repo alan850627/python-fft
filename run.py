@@ -34,14 +34,17 @@ for row in reader:
 p = pyaudio.PyAudio()
 
 def find_closest(myList, myNumber, reset=False):
-  pos = bisect_left(myList, myNumber)
-  if pos >= len(myList) - 2:
+  pos = bisect_left(myList, myNumber) - 1
+  if pos <= 0: 
+    return 0
+
+  if pos >= len(myList) - 1:
     return len(myList) - 2
   return pos
 
 
 def interpolate(leftX, rightX, leftY, rightY, X):
-  if (leftX > X):
+  if (leftX >= X):
     return leftY
   if (X > rightX):
     return rightY
