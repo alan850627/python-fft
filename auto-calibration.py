@@ -36,10 +36,8 @@ STATE = state.STARTED
 NEXT_STATE = state.DELAY_SPEAKER
 
 FREQ_BUCKETS = np.fft.fftfreq(config.CHUNK, 1/float(config.RATE))
-BUCKET_STEP = FREQ_BUCKETS[1] - FREQ_BUCKETS[0]
-print("Frequency Bucket Step: %f" %BUCKET_STEP)
-FREQ_BUCKET_PT = config.START_BUCKET
-FREQ = FREQ_BUCKETS[FREQ_BUCKET_PT]
+FREQ_BUCKET_PT = 0
+FREQ = config.FREQ_TO_CALIBRATE[FREQ_BUCKET_PT]
 SILENCE = [0 for i in range(0, config.CHUNK)]
 
 NOISE_RMS = 0
@@ -57,13 +55,6 @@ line = 0
 
 print(STATE)
 
-######################################################
-#                                                    #
-# [ch1_spk] --> [ch1_mic]    [ch2_mic] <-- [ch2_spk] #
-#                   |                          |     #
-#                   |_------>[computer]------>_|     #
-#                                                    #
-######################################################
 def get_avg(data):
   return avg.get(signals.rms(hp.process(data)))
 
@@ -99,7 +90,7 @@ def callback(data, frame_count, time_info, status):
   if (STATE == state.STARTED):
     MIN_SOUND = get_avg(head_data)
     out = signals.encode([SILENCE, SILENCE])
-    if (COUNTER > 20):
+    if (COUNTER > 2 * config.DELAY_STATES):
       STATE = state.PLAY_NOISE
       COUNTER = 0
       print(STATE)
@@ -111,7 +102,7 @@ def callback(data, frame_count, time_info, status):
     out_arr[config.CH_NOISE_SPK] = noise
     out = signals.encode(out_arr)
 
-    if (COUNTER > 10):
+    if (COUNTER > config.DELAY_STATES):
       STATE = state.RECORD_NOISE
       COUNTER = 0
       avg = RunningAvg(25)
@@ -127,7 +118,7 @@ def callback(data, frame_count, time_info, status):
     out_arr[config.CH_NOISE_SPK] = noise
     out = signals.encode(out_arr)
 
-    if (COUNTER > 50):
+    if (COUNTER > 5 * config.DELAY_STATES):
       print("noise RMS: %f" % NOISE_RMS)
       STATE = state.RECORD_NOISE_DONE
       COUNTER = 0
@@ -141,7 +132,7 @@ def callback(data, frame_count, time_info, status):
     out_arr[config.CH_NOISE_SPK] = SILENCE
     out = signals.encode(out_arr)
 
-    if (COUNTER > 10):
+    if (COUNTER > config.DELAY_STATES):
       STATE = state.MATCH_PLAYBACK
       avg = RunningAvg(5)
       hp = signals.HighPass()
@@ -158,11 +149,11 @@ def callback(data, frame_count, time_info, status):
 
     SPK_RMS = get_avg(head_data)
 
-    if (COUNTER > 10):
+    if (COUNTER > config.DELAY_STATES):
       COUNTER = 0
       avg = RunningAvg(5)
 
-      if (abs(SPK_RMS-NOISE_RMS) < 10):
+      if (abs(SPK_RMS-NOISE_RMS) < 100):
         STATE = state.MATCH_PLAYBACK_DONE
         print(STATE)
 
@@ -204,7 +195,7 @@ def callback(data, frame_count, time_info, status):
     out_arr[config.CH_NOISE_SPK] = noise
     out = signals.encode(out_arr)
 
-    if COUNTER > 10:
+    if COUNTER > config.DELAY_STATES:
       avg = RunningAvg(5)
       STATE = state.DELAY_SPEAKER
       print(STATE)
@@ -250,7 +241,7 @@ def callback(data, frame_count, time_info, status):
     out_arr[config.CH_NOISE_SPK] = noise
     out = signals.encode(out_arr)
 
-    if COUNTER > 10:
+    if COUNTER > config.DELAY_STATES:
       COUNTER = 0
 
       if (CUR_SOUND <= MIN_SOUND or ALTERNATE_COUNTER > config.MAX_ALTERNATE_COUNT):
@@ -279,7 +270,7 @@ def callback(data, frame_count, time_info, status):
     MIN_SOUND = 0
     CUR_SOUND = 0
     FREQ_BUCKET_PT += 1
-    FREQ = FREQ_BUCKETS[FREQ_BUCKET_PT]
+    FREQ = config.FREQ_TO_CALIBRATE[FREQ_BUCKET_PT]
 
     sine = signals.SineWave(config.RATE/float(FREQ))
     recording = signals.Record()
